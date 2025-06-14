@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>可拖拽列宽 & Tooltip 表格示例</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* 表格容器，允许横向滚动 */
+    .table-wrapper {
+      overflow-x: auto;
+      position: relative; /* 作为 tooltip 的定位父级 */
+      border: 1px solid #e5e7eb;
+      border-radius: 0.5rem;
+      padding: 0.5rem;
+      background-color: #ffffff;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #e5e7eb;
+    }
+    th {
+      background-color: #f9fafb;
+      position: relative; /* 为 resizer 提供定位 */
+    }
+    /* 拖拽把手 */
+    .resizer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 0.25rem;
+      height: 100%;
+      cursor: col-resize;
+      user-select: none;
+    }
+    .resizer:hover {
+      background-color: rgba(0,0,0,0.1);
+    }
+    /* 自定义 Tooltip */
+    #custom-tooltip {
+      position: absolute;
+      visibility: hidden;
+      padding: 0.25rem 0.5rem;
+      background-color: rgba(31, 41, 55, 0.9);
+      color: #ffffff;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 10;
+      transition: opacity 0.1s;
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+<div class="container mx-auto p-4">
+  <h1 class="text-xl font-bold mb-4">可拖拽列宽 & Tooltip 表格示例</h1>
+
+  <div class="table-wrapper" id="tableWrapper">
+    <table id="vaultTable" class="table-fixed">
+      <thead>
+        <tr>
+          <th data-col="vaultAddress" style="width:12%" class="p-2">金库地址<div class="resizer"></div></th>
+          <th data-col="name" style="width:10%" class="p-2">名称<div class="resizer"></div></th>
+          <th data-col="nameCn" style="width:10%" class="p-2">名称 (CN)<div class="resizer"></div></th>
+          <th data-col="apr" style="width:8%" class="p-2">APR<div class="resizer"></div></th>
+          <th data-col="tvl" style="width:8%" class="p-2">TVL<div class="resizer"></div></th>
+          <th data-col="pnl" style="width:10%" class="p-2">PNL 曲线<div class="resizer"></div></th>
+          <th data-col="descCn" style="width:22%" class="p-2">描述 (CN)<div class="resizer"></div></th>
+          <th data-col="desc" style="width:20%" class="p-2">描述<div class="resizer"></div></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="p-2">0x123...abc</td>
+          <td class="p-2" data-tooltip="这是一个示例名称">示例名称</td>
+          <td class="p-2">示例名称 (CN)</td>
+          <td class="p-2">5.23%</td>
+          <td class="p-2">1,234,567 U</td>
+          <td class="p-2"><button class="px-2 py-1 bg-blue-500 text-white rounded">查看</button></td>
+          <td class="p-2" data-tooltip="这是中文描述部分，可能比较长，需要 tooltip">这是中文描述部分，可能比较长...</td>
+          <td class="p-2">This is the description in English.</td>
+        </tr>
+        <!-- 更多数据行 -->
+      </tbody>
+    </table>
+    <div id="custom-tooltip"></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const table = document.getElementById('vaultTable');
+  const tableWrapper = document.getElementById('tableWrapper');
+  const tooltip = document.getElementById('custom-tooltip');
+  const storageKey = 'vaultTableColWidths';
+  
+  // 恢复列宽
+  const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+  Object.entries(saved).forEach(([col, w]) => {
+    const th = table.querySelector(`th[data-col="${col}"]`);
+    if (th) th.style.width = w;
+  });
+
+  // 拖拽逻辑
+  table.querySelectorAll('th .resizer').forEach(resizer => {
+    let startX, startWidth, th;
+    resizer.addEventListener('mousedown', e => {
+      th = e.target.closest('th');
+      startX = e.pageX;
+      startWidth = th.offsetWidth;
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+    function onMouseMove(e) {
+      const diff = e.pageX - startX;
+      const newWidth = startWidth + diff;
+      th.style.width = newWidth + 'px';
+    }
+    function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      // 存储宽度
+      const col = th.getAttribute('data-col');
+      saved[col] = th.style.width;
+      localStorage.setItem(storageKey, JSON.stringify(saved));
+    }
+  });
+
+  // Tooltip 显示隐藏
+  let hideTimeout;
+  table.addEventListener('mouseover', event => {
+    const cell = event.target.closest('[data-tooltip]');
+    if (!cell) return;
+    clearTimeout(hideTimeout);
+    tooltip.textContent = cell.getAttribute('data-tooltip');
+    tooltip.style.visibility = 'visible';
+    const wrapperRect = tableWrapper.getBoundingClientRect();
+    const cellRect = cell.getBoundingClientRect();
+    tooltip.style.left = (cellRect.left - wrapperRect.left) + 'px';
+    tooltip.style.top = (cellRect.top - wrapperRect.top - tooltip.offsetHeight - 4) + 'px';
+  });
+  table.addEventListener('mouseout', event => {
+    if (!event.target.closest('[data-tooltip]')) return;
+    hideTimeout = setTimeout(() => {
+      tooltip.style.visibility = 'hidden';
+    }, 200);
+  });
+});
+</script>
+</body>
+</html>

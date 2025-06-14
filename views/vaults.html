@@ -6,7 +6,7 @@
     <title>金库数据 - Hyperliquid 仓位可视化</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"> <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -22,17 +22,17 @@
             border-radius: 0.5rem;
             background-color: #ffffff;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
         }
         table {
             width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
+            border-collapse: collapse;
+            table-layout: fixed;
         }
         th, td {
             padding: 0.75rem;
             text-align: left;
-            border-bottom: 1px solid #e5e7eb;
-            max-width: 0;
+            border: 1px solid #e5e7eb;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -43,6 +43,7 @@
             position: sticky;
             top: 0;
             z-index: 1;
+            position: relative;
         }
         tr:nth-child(even) {
             background-color: #f9fafb;
@@ -70,19 +71,30 @@
         .copy-icon:hover {
             color: #3b82f6;
         }
+        .resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 0.25rem;
+            height: 100%;
+            cursor: col-resize;
+            user-select: none;
+        }
+        .resizer:hover {
+            background-color: rgba(0,0,0,0.1);
+        }
         .custom-tooltip {
-            position: fixed;
+            position: absolute;
             visibility: hidden;
-            background-color: #333;
-            color: #fff;
+            background-color: rgba(31, 41, 55, 0.9);
+            color: #ffffff;
             padding: 0.25rem 0.5rem;
             border-radius: 0.25rem;
-            z-index: 1000;
-            white-space: normal;
-            max-width: 200px;
-            word-break: break-word;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            font-size: 0.875rem;
+            white-space: nowrap;
             pointer-events: none;
+            z-index: 10;
+            transition: opacity 0.1s;
         }
         .recharts-wrapper {
             position: relative;
@@ -113,9 +125,9 @@
         .pagination {
             margin-top: 1rem;
             display: flex;
-            gap: 0.25rem; /* 减少间距 */
+            gap: 0.25rem;
             align-items: center;
-            flex-wrap: wrap; /* 允许换行以适配小屏幕 */
+            flex-wrap: wrap;
         }
         .page-item {
             padding: 0.25rem 0.5rem;
@@ -185,20 +197,20 @@
         <div class="table-wrapper">
             <table id="vaultTable">
                 <thead>
-<tr>
-    <th class="p-2 w-[5%]">金库地址</th>
-    <th class="p-2 w-[5%]">名称</th>
-    <th class="p-2 w-[12%]">名称 (CN)</th>
-    <th class="p-2 w-[5%]">APR</th>
-    <th class="p-2 w-[8%]">TVL</th>
-    <th class="p-2 w-[10%]">PNL 曲线</th>
-    <th class="p-2 w-[22%]">描述 (CN)</th>
-    <th class="p-2 w-[5%]">描述</th>
-</tr>
-
+                    <tr>
+                        <th class="p-2" data-col="vaultAddress">金库地址<div class="resizer"></div></th>
+                        <th class="p-2" data-col="name">名称<div class="resizer"></div></th>
+                        <th class="p-2" data-col="nameCn">名称 (CN)<div class="resizer"></div></th>
+                        <th class="p-2" data-col="apr">APR<div class="resizer"></div></th>
+                        <th class="p-2" data-col="tvl">TVL<div class="resizer"></div></th>
+                        <th class="p-2" data-col="pnl">PNL 曲线<div class="resizer"></div></th>
+                        <th class="p-2" data-col="descCn">描述 (CN)<div class="resizer"></div></th>
+                        <th class="p-2" data-col="desc">描述<div class="resizer"></div></th>
+                    </tr>
                 </thead>
                 <tbody id="vaultTableBody"></tbody>
             </table>
+            <div id="custom-tooltip" class="custom-tooltip"></div>
         </div>
         <div class="pagination flex justify-center">
             <div id="pageNumbers" class="flex"></div>
@@ -212,7 +224,6 @@
             </select>
         </div>
         <p class="text-center mt-4" id="dataStatus"></p>
-        <div id="custom-tooltip" class="custom-tooltip"></div> <!-- 自定义 tooltip 容器 -->
     </div>
     <script src="/data/vault_data.js"></script>
     <script src="/js/nav.js"></script>
@@ -224,8 +235,10 @@
             const perPageSelect = document.getElementById('perPage');
             const pageNumbers = document.getElementById('pageNumbers');
             const dataStatus = document.getElementById('dataStatus');
-            const customTooltip = document.getElementById('custom-tooltip');
-            let tooltipTimeout;
+            const table = document.getElementById('vaultTable');
+            const tableWrapper = document.querySelector('.table-wrapper');
+            const tooltip = document.getElementById('custom-tooltip');
+            const storageKey = 'vaultTableColWidths';
 
             let charts = {};
             let state = {
@@ -275,8 +288,7 @@
             }
 
             state = loadState();
-            saveState(state)
-            console.log(state)
+            saveState(state);
             sortBySelect.value = state.sortBy;
             perPageSelect.value = state.perPage;
             const totalItems = vaultData.length;
@@ -354,23 +366,6 @@
                 });
             }
 
-            function showTooltip(event) {
-                clearTimeout(tooltipTimeout);
-                const cell = event.target.closest('td');
-                if (!cell || !cell.dataset.tooltip) return;
-                customTooltip.innerText = cell.dataset.tooltip;
-                customTooltip.style.visibility = 'visible';
-                const rect = cell.getBoundingClientRect();
-                customTooltip.style.left = (rect.left + window.scrollX) + 'px';
-                customTooltip.style.top = (rect.top + window.scrollY - 40) + 'px';
-            }
-
-            function hideTooltip() {
-                tooltipTimeout = setTimeout(() => {
-                    customTooltip.style.visibility = 'hidden';
-                }, 100);
-            }
-
             function renderTable(data) {
                 tableBody.innerHTML = '';
                 const start = (state.page - 1) * state.perPage;
@@ -408,9 +403,6 @@
                 dataStatus.textContent = `共 ${totalItems} 条记录，当前第 ${state.page} 页，共 ${totalPages} 页`;
             }
 
-            tableBody.addEventListener('mouseover', showTooltip);
-            tableBody.addEventListener('mouseout', hideTooltip);
-
             function sortData(data) {
                 return [...data].sort((a, b) => {
                     const aValue = parseFloat(a[state.sortBy]) || 0;
@@ -421,7 +413,7 @@
 
             function renderPageNumbers() {
                 pageNumbers.innerHTML = '';
-                const visiblePages = 7; // 显示当前页前后 3 页
+                const visiblePages = 7;
                 let startPage = Math.max(1, state.page - 3);
                 let endPage = Math.min(totalPages, startPage + visiblePages - 1);
 
@@ -429,7 +421,6 @@
                     startPage = Math.max(1, endPage - visiblePages + 1);
                 }
 
-                // 添加前置省略号
                 if (startPage > 1) {
                     const firstPage = document.createElement('div');
                     firstPage.className = 'page-item';
@@ -458,7 +449,6 @@
                     pageNumbers.appendChild(pageBtn);
                 }
 
-                // 添加后置省略号
                 if (endPage < totalPages) {
                     if (endPage < totalPages - 1) {
                         const ellipsis = document.createElement('div');
@@ -502,6 +492,57 @@
                 state.page = 1;
                 totalPages = Math.ceil(totalItems / state.perPage);
                 updatePagination();
+            });
+
+            // 恢复列宽
+            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            Object.entries(saved).forEach(([col, w]) => {
+                const th = table.querySelector(`th[data-col="${col}"]`);
+                if (th) th.style.width = w;
+            });
+
+            // 拖拽逻辑
+            table.querySelectorAll('th .resizer').forEach(resizer => {
+                let startX, startWidth, th;
+                resizer.addEventListener('mousedown', e => {
+                    th = e.target.closest('th');
+                    startX = e.pageX;
+                    startWidth = th.offsetWidth;
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                });
+                function onMouseMove(e) {
+                    const diff = e.pageX - startX;
+                    const newWidth = startWidth + diff;
+                    th.style.width = newWidth + 'px';
+                }
+                function onMouseUp() {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    const col = th.getAttribute('data-col');
+                    saved[col] = th.style.width;
+                    localStorage.setItem(storageKey, JSON.stringify(saved));
+                }
+            });
+
+            // Tooltip 显示隐藏
+            let hideTimeout;
+            table.addEventListener('mouseover', event => {
+                const cell = event.target.closest('[data-tooltip]');
+                if (!cell) return;
+                clearTimeout(hideTimeout);
+                tooltip.textContent = cell.getAttribute('data-tooltip');
+                tooltip.style.visibility = 'visible';
+                const wrapperRect = tableWrapper.getBoundingClientRect();
+                const cellRect = cell.getBoundingClientRect();
+                tooltip.style.left = (cellRect.left - wrapperRect.left) + 'px';
+                tooltip.style.top = (cellRect.top - wrapperRect.top - tooltip.offsetHeight - 4) + 'px';
+            });
+            table.addEventListener('mouseout', event => {
+                if (!event.target.closest('[data-tooltip]')) return;
+                hideTimeout = setTimeout(() => {
+                    tooltip.style.visibility = 'hidden';
+                }, 200);
             });
 
             // 初始加载第一页
