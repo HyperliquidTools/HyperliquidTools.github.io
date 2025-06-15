@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <li><a href="https://app.hyperliquid.xyz/join/STARDREAM" class="nav-link hover:underline hover:text-gray-200" target="_blank" rel="noopener">Hyperliquid</a></li>
                             <li><a href="https://cpython666.github.io/" class="nav-link hover:underline hover:text-gray-200" target="_blank" rel="noopener">博客</a></li>
                             <li><a href="https://x.com/stardreamfly" class="nav-link hover:underline hover:text-gray-200" target="_blank" rel="noopener">X 币圈感悟</a></li>
+                            <li><a href="https://github.com/cpython666/HyperX" class="nav-link hover:underline hover:text-gray-200" target="_blank" rel="noopener">Github</a></li>
                         </ul>
                 </div>
             </nav>
